@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>QR Card</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: sans-serif;
+    }
+
+    #qr-display {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      background: #fff;
+    }
+
+    #setup {
+      text-align: center;
+      color: #fff;
+      padding: 2rem;
+    }
+
+    #setup p {
+      margin-bottom: 1.5rem;
+      font-size: 1.1rem;
+      opacity: 0.7;
+    }
+
+    #pick-btn {
+      display: inline-block;
+      padding: 1rem 2rem;
+      background: #fff;
+      color: #000;
+      font-size: 1.1rem;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      border: none;
+    }
+
+    #reset-btn {
+      display: none;
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.3);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    #file-input { display: none; }
+  </style>
+</head>
+<body>
+
+  <img id="qr-display" alt="QR Code">
+
+  <div id="setup">
+    <p>Tap to save your QR code screenshot.<br>It stays on your phone only.</p>
+    <button id="pick-btn">Choose QR Screenshot</button>
+  </div>
+
+  <button id="reset-btn">Change QR</button>
+  <input type="file" id="file-input" accept="image/*">
+
+  <script>
+    const qrDisplay = document.getElementById('qr-display');
+    const setup     = document.getElementById('setup');
+    const pickBtn   = document.getElementById('pick-btn');
+    const resetBtn  = document.getElementById('reset-btn');
+    const fileInput = document.getElementById('file-input');
+
+    function showQR(src) {
+      qrDisplay.src = src;
+      qrDisplay.style.display = 'block';
+      setup.style.display = 'none';
+      resetBtn.style.display = 'block';
+    }
+
+    function showSetup() {
+      qrDisplay.style.display = 'none';
+      setup.style.display = 'block';
+      resetBtn.style.display = 'none';
+    }
+
+    // Load saved QR on launch
+    const saved = localStorage.getItem('qr_image');
+    if (saved) {
+      showQR(saved);
+    }
+
+    pickBtn.addEventListener('click', () => fileInput.click());
+    resetBtn.addEventListener('click', () => {
+      localStorage.removeItem('qr_image');
+      showSetup();
+    });
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const data = e.target.result;
+        localStorage.setItem('qr_image', data);
+        showQR(data);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+
+</body>
+</html>
