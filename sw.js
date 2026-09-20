@@ -1,5 +1,5 @@
 // Cache names are versioned: bump to force clients onto the new shell.
-const CACHE = 'qr-card-v2';
+const CACHE = 'qr-card-v3';
 
 // Relative URLs resolve against this worker's location, so the app works
 // from any subpath (e.g. GitHub Pages project sites). Absolute paths like
