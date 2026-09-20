@@ -50,6 +50,13 @@
       border: none;
     }
 
+    #error {
+      display: none;
+      margin-top: 1.5rem;
+      color: #ff8080;
+      font-size: 1rem;
+    }
+
     #reset-btn {
       display: none;
       position: fixed;
@@ -74,6 +81,7 @@
   <div id="setup">
     <p>Tap to save your QR code screenshot.<br>It stays on your phone only.</p>
     <button id="pick-btn">Choose QR Screenshot</button>
+    <p id="error"></p>
   </div>
 
   <button id="reset-btn">Change QR</button>
@@ -85,6 +93,12 @@
     const pickBtn   = document.getElementById('pick-btn');
     const resetBtn  = document.getElementById('reset-btn');
     const fileInput = document.getElementById('file-input');
+    const errorEl   = document.getElementById('error');
+
+    // Cap the stored image so it always fits in localStorage (~5MB quota).
+    // 1600px on the long edge keeps QR modules sharp enough to scan.
+    const MAX_EDGE = 1600;
+    const JPEG_QUALITY = 0.85;
 
     function showQR(src) {
       qrDisplay.src = src;
@@ -94,38 +108,85 @@
     }
 
     function showSetup() {
+      qrDisplay.removeAttribute('src');
       qrDisplay.style.display = 'none';
       setup.style.display = 'block';
       resetBtn.style.display = 'none';
     }
 
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+
+    function hideError() {
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
+
+    function readBlobAsDataURL(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function saveImage(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        showError('That file is not an image.');
+        return;
+      }
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+        const w = Math.max(1, Math.round(bitmap.width * scale));
+        const h = Math.max(1, Math.round(bitmap.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+        bitmap.close();
+
+        const jpeg = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
+        if (!jpeg) throw new Error('encode failed');
+
+        const dataUrl = await readBlobAsDataURL(jpeg);
+        localStorage.setItem('qr_image', dataUrl);
+        hideError();
+        fileInput.value = '';
+        showQR(dataUrl);
+      } catch (err) {
+        const msg = err && err.name === 'QuotaExceededError'
+          ? 'Image too large to save on this phone. Try a smaller screenshot.'
+          : 'Could not save that image. Please try another file.';
+        showError(msg);
+      }
+    }
+
     // Load saved QR on launch
-    const saved = localStorage.getItem('qr_image');
-    if (saved) {
-      showQR(saved);
+    try {
+      const saved = localStorage.getItem('qr_image');
+      if (saved) showQR(saved);
+    } catch (err) {
+      showError('Saved image could not be read.');
     }
 
     pickBtn.addEventListener('click', () => fileInput.click());
     resetBtn.addEventListener('click', () => {
-      localStorage.removeItem('qr_image');
+      try { localStorage.removeItem('qr_image'); } catch (err) { /* storage unavailable */ }
+      hideError();
       showSetup();
     });
 
     fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = e => {
-        const data = e.target.result;
-        localStorage.setItem('qr_image', data);
-        showQR(data);
-      };
-      reader.readAsDataURL(file);
+      saveImage(fileInput.files[0]);
     });
 
-    // Register service worker
+    // Register service worker (offline support)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
+      navigator.serviceWorker.register('sw.js').catch(() => { /* offline still works after first install */ });
     }
   </script>
 
